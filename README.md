@@ -1,6 +1,7 @@
 # bugtriage-mcp
 
-![demo](docs/demo.png)
+<img width="2633" height="1895" alt="1CD65DA2-C3A3-4549-83B0-976802D26EB9" src="https://github.com/user-attachments/assets/ff14e1c2-905e-42e3-9f80-100f63e33e01" />
+
 
 An MCP server that gives any AI assistant or agent ML-backed tools for bug analysis on a vehicle connectivity module (LTE modem, WiFi, Bluetooth, eCall, OTA, CAN gateway): search ECU logs, triage a new bug report, find likely duplicates, and cluster historical bugs into recurring failure themes.
 
