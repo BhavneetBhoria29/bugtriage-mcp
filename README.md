@@ -57,7 +57,7 @@ python eval/run_eval.py               # metrics above, also written to eval/resu
 python eval/run_eval.py --wandb       # same, plus logs the run to Weights & Biases (pip install -e ".[wandb]")
 ```
 
-**Experiment tracking (W&B):** `--wandb` logs the eval config (split, seed, bootstrap count, review-gate threshold, git SHA), every metric with its CI bounds, a per-ranker retrieval table, and `results.json` as a versioned artifact. That makes it easy to see whether a change to the retriever or the gate actually moved the numbers or just moved them inside the CI. `WANDB_MODE=offline` works without an account.
+**Experiment tracking (W&B):** `--wandb` logs the eval config (split, seed, bootstrap count, review-gate threshold, git SHA), every metric with its CI bounds, a per-ranker retrieval table, and `results.json` as a versioned artifact. That makes it easy to see whether a change to the retriever or the gate actually moved the numbers or just moved them inside the CI. `WANDB_MODE=offline` works without an account. Example run: [bugtriage-mcp on W&B](https://wandb.ai/bhavrajput97-brandenburgische-technische-universit-t-cot/bugtriage-mcp/runs/w2y1v2g8).
 
 **Claude Desktop / Claude Code (stdio):**
 
