@@ -1,0 +1,27 @@
+[project]
+name = "bugtriage-mcp"
+version = "0.1.0"
+description = "ML-backed bug triage and log search for an automotive connectivity ECU, exposed as MCP tools"
+requires-python = ">=3.10"
+dependencies = [
+  "mcp>=1.10,<2",
+  "scikit-learn>=1.3",
+  "rank-bm25>=0.2.2",
+  "numpy>=1.24",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=7"]
+
+[project.scripts]
+bugtriage-mcp = "bugtriage_mcp.server:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+pythonpath = ["src"]
