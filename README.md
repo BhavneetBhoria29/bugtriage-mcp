@@ -1,5 +1,7 @@
 # bugtriage-mcp
 
+![demo](docs/demo.png)
+
 An MCP server that gives any AI assistant or agent ML-backed tools for bug analysis on a vehicle connectivity module (LTE modem, WiFi, Bluetooth, eCall, OTA, CAN gateway): search ECU logs, triage a new bug report, find likely duplicates, and cluster historical bugs into recurring failure themes.
 
 I built it to explore what "AI in the series development process" looks like in practice. It's the sort of tooling a dev team could point Claude Code or an internal agent at: engineers ask in plain language, and the agent calls real models instead of guessing.
