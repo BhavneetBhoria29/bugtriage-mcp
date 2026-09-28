@@ -52,9 +52,12 @@ Latency per tool call (900 bugs, 20k log lines, single process): `triage_bug` p9
 ```bash
 pip install -e ".[dev]"
 python -m bugtriage_mcp.data          # generate synthetic data into ./data
-pytest -q                             # 12 tests incl. an end-to-end stdio round-trip via the MCP client
+pytest -q                             # 17 tests incl. an MCP stdio round-trip and a gRPC round-trip
 python eval/run_eval.py               # metrics above, also written to eval/results.json
+python eval/run_eval.py --wandb       # same, plus logs the run to Weights & Biases (pip install -e ".[wandb]")
 ```
+
+**Experiment tracking (W&B):** `--wandb` logs the eval config (split, seed, bootstrap count, review-gate threshold, git SHA), every metric with its CI bounds, a per-ranker retrieval table, and `results.json` as a versioned artifact. That makes it easy to see whether a change to the retriever or the gate actually moved the numbers or just moved them inside the CI. `WANDB_MODE=offline` works without an account.
 
 **Claude Desktop / Claude Code (stdio):**
 
@@ -79,6 +82,26 @@ docker build -t bugtriage-mcp .
 docker run -p 8000:8000 bugtriage-mcp
 ```
 
+**gRPC (service-to-service):**
+
+MCP is the right interface for an LLM client. For another service calling the same models (a ticketing webhook that auto-triages new tickets, a CI job, a backfill), I added a typed gRPC API over the same engine and shared model state. Contract is in [`proto/bugtriage_mcp/v1/triage.proto`](proto/bugtriage_mcp/v1/triage.proto): `TriageBug`, `FindSimilarBugs`, `GetBug`, `SearchLogs`.
+
+```bash
+pip install -e ".[grpc]"
+python -m bugtriage_mcp.grpc_server   # :50051, override with GRPC_PORT
+```
+
+```python
+import grpc
+from bugtriage_mcp.v1 import triage_pb2 as pb, triage_pb2_grpc as rpc
+
+stub = rpc.BugTriageStub(grpc.insecure_channel("localhost:50051"))
+r = stub.TriageBug(pb.TriageBugRequest(title="Hotspot drops after cold start", description="DHCP_NO_LEASE, FW 4.2.17"))
+print(r.component, r.component_confidence, r.needs_human_review)
+```
+
+Bad input gets `INVALID_ARGUMENT`, an unknown bug id gets `NOT_FOUND`, and payloads over 20k characters are rejected before vectorising. An interceptor logs method, status and latency per RPC. Client-side over loopback (300 calls each, single process): `TriageBug` p95 7.6 ms, `FindSimilarBugs` p95 4.0 ms, `SearchLogs` p95 4.6 ms. TLS is left to the ingress for now.
+
 Example prompts once it's connected:
 - "Triage this: hotspot drops after cold start, DHCP_NO_LEASE in the log, FW 4.2.17"
 - "How many CAN_BUS_OFF errors did we log last week, and on how many vehicles?"
@@ -87,6 +110,7 @@ Example prompts once it's connected:
 ## Design notes
 
 - Logging goes to stderr because stdout is the MCP transport in stdio mode. Every tool call logs its latency.
+- One model state (`state.py`) is shared by both transports, so MCP and gRPC can never disagree about a prediction.
 - Tool inputs are clamped (`limit`, `k`, `n_clusters`) so an agent can't ask for 10k rows by accident.
 - Classical ML on purpose: it trains in a second, runs in a small container, and is easy to inspect. The obvious next step on real data is swapping the TF-IDF features for sentence embeddings behind the same interface and checking whether the eval moves.
 

@@ -4,10 +4,19 @@ Split is grouped by root cause, so near-duplicate tickets never sit on both side
 of the split (a random split leaks and inflates every number).
 
     python eval/run_eval.py            # prints table, writes eval/results.json
+    python eval/run_eval.py --wandb    # also logs the run to Weights & Biases
+
+W&B is optional: without --wandb nothing is imported or sent. With it, the run logs
+config (split, bootstrap settings, gate threshold), every metric with its CI bounds,
+a per-mode retrieval table, and results.json as a versioned artifact, so eval runs
+can be compared across code changes. Set WANDB_MODE=offline to log locally with no account.
 """
 from __future__ import annotations
 
+import argparse
 import json
+import os
+import subprocess
 import sys
 from pathlib import Path
 
@@ -45,7 +54,52 @@ def fmt(t):
     return f"{t[0]:.3f} [{t[1]:.3f}, {t[2]:.3f}]"
 
 
+def _git_sha() -> str | None:
+    try:
+        return subprocess.check_output(["git", "rev-parse", "--short", "HEAD"], cwd=ROOT, text=True,
+                                       stderr=subprocess.DEVNULL).strip()
+    except Exception:
+        return None
+
+
+def log_to_wandb(results: dict, config: dict, project: str) -> None:
+    """Flatten (point, lo, hi) tuples into metric/lo/hi keys so W&B can chart them and compare runs."""
+    import wandb  # optional dependency, only needed with --wandb
+
+    run = wandb.init(project=project, job_type="eval", config=config)
+    summary: dict[str, float] = {}
+
+    def put(key: str, val) -> None:
+        if isinstance(val, (list, tuple)) and len(val) == 3:
+            summary[key], summary[f"{key}/ci_lo"], summary[f"{key}/ci_hi"] = val
+        elif isinstance(val, (int, float)) and val is not None:
+            summary[key] = float(val)
+
+    for k, v in results["component"].items():
+        put(f"component/{k}", v)
+    for k, v in results["severity"].items():
+        put(f"severity/{k}", v)
+    for k, v in results["human_review_gate"].items():
+        put(f"review_gate/{k}", v)
+    table = wandb.Table(columns=["mode", "recall@5", "recall@5_lo", "recall@5_hi", "mrr@10", "mrr@10_lo", "mrr@10_hi"])
+    for mode, r in results["retrieval"].items():
+        put(f"retrieval/{mode}/recall@5", r["recall@5"])
+        put(f"retrieval/{mode}/mrr@10", r["mrr@10"])
+        table.add_data(mode, *r["recall@5"], *r["mrr@10"])
+
+    run.summary.update(summary)
+    run.log({"retrieval_by_mode": table})
+    art = wandb.Artifact("bugtriage-eval-results", type="eval-results")
+    art.add_file(str(ROOT / "eval" / "results.json"))
+    run.log_artifact(art)
+    run.finish()
+
+
 def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--wandb", action="store_true", help="log this eval run to Weights & Biases")
+    ap.add_argument("--wandb-project", default=os.environ.get("WANDB_PROJECT", "bugtriage-mcp"))
+    args = ap.parse_args()
     bugs = generate_bugs()
     groups = [b.root_cause_id for b in bugs]
     tr_idx, te_idx = next(GroupShuffleSplit(n_splits=1, test_size=0.25, random_state=42).split(bugs, groups=groups))
@@ -101,6 +155,11 @@ def main() -> None:
     print("\nduplicate retrieval    recall@5                  MRR@10")
     for mode, r in retrieval.items():
         print(f"  {mode:<15}      {fmt(r['recall@5'])}   {fmt(r['mrr@10'])}")
+
+    if args.wandb:
+        config = {"n_boot": N_BOOT, "test_size": 0.25, "split_seed": 42, "split": "GroupShuffleSplit(root_cause)",
+                  "review_gate_threshold": 0.6, "rrf_k": 60, "n_bugs": len(bugs), "git_sha": _git_sha()}
+        log_to_wandb(results, config, args.wandb_project)
 
 
 if __name__ == "__main__":

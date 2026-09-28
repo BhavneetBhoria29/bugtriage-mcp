@@ -1,0 +1,86 @@
+syntax = "proto3";
+
+// Typed RPC interface to the same triage engine the MCP server exposes.
+// MCP is for LLM clients; gRPC is for service-to-service callers (a ticketing
+// webhook, a CI job) that want a strict schema and low overhead.
+package bugtriage_mcp.v1;
+
+service BugTriage {
+  rpc TriageBug(TriageBugRequest) returns (TriageBugResponse);
+  rpc FindSimilarBugs(FindSimilarBugsRequest) returns (FindSimilarBugsResponse);
+  rpc GetBug(GetBugRequest) returns (Bug);
+  rpc SearchLogs(SearchLogsRequest) returns (SearchLogsResponse);
+}
+
+message Bug {
+  string id = 1;
+  string title = 2;
+  string description = 3;
+  string component = 4;
+  string severity = 5;
+}
+
+message ComponentProbability {
+  string component = 1;
+  double p = 2;
+}
+
+message TriageBugRequest {
+  string title = 1;
+  string description = 2;
+}
+
+message TriageBugResponse {
+  string component = 1;
+  double component_confidence = 2;
+  repeated ComponentProbability component_alternatives = 3;
+  string severity = 4;
+  map<string, double> severity_probs = 5;
+  repeated string error_codes = 6;
+  // true when component confidence is below 0.6: route to a human, don't auto-assign
+  bool needs_human_review = 7;
+  repeated Bug possible_duplicates = 8;
+}
+
+message FindSimilarBugsRequest {
+  string text = 1;
+  int32 k = 2;  // clamped to [1, 20]; 0 means 5
+}
+
+message ScoredBug {
+  Bug bug = 1;
+  double score = 2;
+}
+
+message FindSimilarBugsResponse {
+  repeated ScoredBug hits = 1;
+}
+
+message GetBugRequest {
+  string bug_id = 1;
+}
+
+message SearchLogsRequest {
+  string query = 1;
+  string level = 2;   // INFO | WARN | ERROR, empty = any
+  string module = 3;  // empty = any
+  string since = 4;   // ISO timestamp, empty = open
+  string until = 5;
+  int32 limit = 6;    // clamped to [1, 200]; 0 means 50
+}
+
+message LogLine {
+  string ts = 1;
+  string level = 2;
+  string module = 3;
+  string code = 4;
+  string message = 5;
+  string vin_suffix = 6;
+}
+
+message SearchLogsResponse {
+  int32 total_matches = 1;
+  map<string, int32> code_counts = 2;
+  int32 affected_vehicles = 3;
+  repeated LogLine lines = 4;
+}

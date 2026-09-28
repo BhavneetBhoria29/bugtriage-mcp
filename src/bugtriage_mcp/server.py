@@ -9,32 +9,18 @@ import logging
 import os
 import sys
 import time
-from functools import lru_cache, wraps
-from pathlib import Path
+from functools import wraps
 
 from mcp.server.fastmcp import FastMCP
 
-from .data import load_bugs, load_logs, write_dataset
-from .engine import BugIndex, Triager, cluster_bugs as _cluster, search_logs as _search_logs
-
-DATA_DIR = Path(os.environ.get("BUGTRIAGE_DATA", Path(__file__).resolve().parents[2] / "data"))
+from .engine import cluster_bugs as _cluster, search_logs as _search_logs
+from .state import load_state as _state
 
 # stdout is the MCP transport in stdio mode, so all logging goes to stderr
 logging.basicConfig(stream=sys.stderr, level=logging.INFO, format="%(asctime)s %(levelname)s %(message)s")
 log = logging.getLogger("bugtriage")
 
 mcp = FastMCP("bugtriage", host="0.0.0.0", port=int(os.environ.get("PORT", 8000)))
-
-
-@lru_cache(maxsize=1)
-def _state():
-    if not (DATA_DIR / "bugs.jsonl").exists():
-        write_dataset(DATA_DIR)
-    bugs, logs = load_bugs(DATA_DIR / "bugs.jsonl"), load_logs(DATA_DIR / "logs.jsonl")
-    t = time.perf_counter()
-    state = {"bugs": bugs, "logs": logs, "index": BugIndex(bugs), "triager": Triager().fit(bugs)}
-    log.info("loaded %d bugs, %d log lines, models fit in %.2fs", len(bugs), len(logs), time.perf_counter() - t)
-    return state
 
 
 def _timed(fn):

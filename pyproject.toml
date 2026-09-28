@@ -11,10 +11,14 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=7"]
+dev = ["pytest>=7", "grpcio>=1.84", "protobuf>=7.35", "grpcio-tools>=1.84"]
+# generated stubs in src/bugtriage_mcp/v1 need these runtime floors
+grpc = ["grpcio>=1.84", "protobuf>=7.35"]
+wandb = ["wandb>=0.19"]
 
 [project.scripts]
 bugtriage-mcp = "bugtriage_mcp.server:main"
+bugtriage-grpc = "bugtriage_mcp.grpc_server:main"
 
 [build-system]
 requires = ["setuptools>=68"]
